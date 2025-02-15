@@ -3,8 +3,9 @@
   "compilerOptions": {
     "rootDir": "../",
     "baseUrl": ".",
-    "outDir": "./dist"
+    "outDir": "../dist",
+    "noEmit": false
   },
-  "include": ["./src", "../shared", "../package.json"],
+  "include": ["./src", "./custom.d.ts", "../shared", "../package.json"],
   "exclude": ["**/__mocks__", "./src/**/tests", "**/*.test.*"]
 }

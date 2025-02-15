@@ -1,8 +1,8 @@
 import { omit, assoc, merge, curry } from 'lodash/fp';
 
-import { async, contentTypes as contentTypesUtils, validate } from '@strapi/utils';
+import { async, contentTypes as contentTypesUtils, validate, errors } from '@strapi/utils';
 
-import { UID } from '@strapi/types';
+import type { UID } from '@strapi/types';
 import { wrapInTransaction, type RepositoryFactoryMethod } from './common';
 import * as DP from './draft-and-publish';
 import * as i18n from './internationalization';
@@ -16,13 +16,17 @@ import { transformParamsToQuery } from './transform/query';
 import { transformParamsDocumentId } from './transform/id-transform';
 import { createEventManager } from './events';
 import * as unidirectionalRelations from './utils/unidirectional-relations';
+import entityValidator from '../entity-validator';
 
 const { validators } = validate;
 
 // we have to typecast to reconcile the differences between validator and database getModel
 const getModel = ((schema: UID.Schema) => strapi.getModel(schema)) as (schema: string) => any;
 
-export const createContentTypeRepository: RepositoryFactoryMethod = (uid) => {
+export const createContentTypeRepository: RepositoryFactoryMethod = (
+  uid,
+  validator = entityValidator
+) => {
   const contentType = strapi.contentType(uid);
   const hasDraftAndPublish = contentTypesUtils.hasDraftAndPublish(contentType);
 
@@ -44,12 +48,17 @@ export const createContentTypeRepository: RepositoryFactoryMethod = (uid) => {
     await validators.validateFields(ctx, params.fields, fieldValidations);
     await validators.validatePopulate(ctx, params.populate, populateValidations);
 
+    // Strip lookup from params, it's only used internally
+    if (params.lookup) {
+      throw new errors.ValidationError("Invalid params: 'lookup'");
+    }
+
     // TODO: add validate status, locale, pagination
 
     return params;
   };
 
-  const entries = createEntriesService(uid);
+  const entries = createEntriesService(uid, validator);
 
   const eventManager = createEventManager(strapi, uid);
   const emitEvent = curry(eventManager.emitEvent);
@@ -180,7 +189,7 @@ export const createContentTypeRepository: RepositoryFactoryMethod = (uid) => {
       entriesToClone,
       async.pipe(
         validateParams,
-        omit('id'),
+        omit(['id', 'createdAt', 'updatedAt']),
         // assign new documentId
         assoc('documentId', createDocumentId()),
         // Merge new data into it
